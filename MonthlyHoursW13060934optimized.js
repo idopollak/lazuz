@@ -757,9 +757,17 @@ function createHoursDaysTable() {
   // Format the sheet
   debugLog("Formatting sheet");
   
+  // Ensure sheet has enough columns for all data
+  var requiredColumns = daysInMonth + 10; // days + time column + totals + utilization + buffer
+  var currentColumns = destSheet.getMaxColumns();
+  if (currentColumns < requiredColumns) {
+    destSheet.insertColumnsAfter(currentColumns, requiredColumns - currentColumns);
+    debugLog("Added " + (requiredColumns - currentColumns) + " columns to sheet");
+  }
+  
   // Set column widths B to AF to 70 pixels
   debugLog("Setting column widths B to AF");
-  for (var col = 2; col <= 32; col++) { // B=2, AF=32
+  for (var col = 2; col <= Math.min(32, daysInMonth + 1); col++) { // B=2, limit to actual days
     destSheet.setColumnWidth(col, 70);
   }
   
@@ -1013,12 +1021,37 @@ function createHoursDaysTable() {
     totalDatesRow.push(colTotal === 0 ? '' : colTotal);
     grandTotal += colTotal;
   }
-  totalDatesRow.push(grandTotal);
+  totalDatesRow.push(grandTotal); // Total Hours column
+  
+  // Add separator column
+  totalDatesRow.push('');
+  
+  // Calculate total available hours
+  var totalAvailableHours = 0;
+  for (var r = 0; r < availableGrid.length; r++) {
+    for (var c = 0; c < availableGrid[r].length; c++) {
+      totalAvailableHours += availableGrid[r][c];
+    }
+  }
+  totalDatesRow.push(totalAvailableHours);
+  
+  // Add overall utilization percentage
+  if (totalAvailableHours > 0) {
+    totalDatesRow.push(grandTotal / totalAvailableHours);
+  } else {
+    totalDatesRow.push('');
+  }
   
   var totalRowIndex = tableStartRow + timeRows.length + 1;
   destSheet.getRange(totalRowIndex, 1, 1, totalDatesRow.length).setValues([totalDatesRow]);
   destSheet.getRange(totalRowIndex, 1, 1, totalDatesRow.length).setFontWeight('bold');
   destSheet.getRange(totalRowIndex, 1, 1, totalDatesRow.length).setBorder(true, false, false, false, false, false, 'black', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  
+  // Format the utilization percentage in Total Dates row
+  var lcol1 = daysInMonth + 2; // Last data column (Total Hours)
+  if (totalAvailableHours > 0) {
+    destSheet.getRange(totalRowIndex, lcol1 + 3).setNumberFormat('0.0%').setFontWeight('bold');
+  }
   
   // Apply formatting
   debugLog("Applying formatting to table");
@@ -1101,8 +1134,6 @@ function createHoursDaysTable() {
     }
   }
   
-  // Find last column (lcol1)
-  var lcol1 = daysInMonth + 2; // Last data column (Total Hours)
   debugLog("Last column (lcol1) is: " + lcol1);
   
   // Set width of column lcol1+1
@@ -1155,12 +1186,6 @@ function createHoursDaysTable() {
   
   // Find last row
   var lastDataRow = totalRowIndex;
-  
-  // Calculate total available hours for utilization percentage
-  var totalAvailableHours = 0;
-  for (var i = 0; i < capacityData.length; i++) {
-    totalAvailableHours += capacityData[i][0];
-  }
   
   // Add summary section using batch operations
   var summaryStartRow = lastDataRow + 3;
